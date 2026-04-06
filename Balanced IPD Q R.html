@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategy Payoffs vs. Noise</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #fafafa;
+    --surface2: #f4f4f5;
+    --border: rgba(0,0,0,0.12);
+    --border2: rgba(0,0,0,0.20);
+    --text: #171717;
+    --muted: #52525b;
+    --accent: #2563eb;
+    --accent2: #ea580c;
+    --coop: #16a34a;
+    --defect: #dc2626;
+    --gold: #d97706;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; overflow-x: hidden; }
+  ::selection { background: var(--accent); color: #fff; }
+  header { border-bottom: 1px solid var(--border); padding: 1.2rem 3rem 1rem; display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .header-left h1 { font-family: 'Instrument Serif', serif; font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); }
+  .header-left h1 em { font-style: italic; color: var(--accent); }
+  .header-sub { margin-top: 0.5rem; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .run-btn { background: var(--accent); color: #fff; border: none; padding: 0.75rem 1.75rem; font-family: 'DM Mono', monospace; font-size: 0.8rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .run-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+  .run-btn.running { opacity: 0.6; cursor: not-allowed; }
+  .controls { padding: 0.75rem 3rem; border-bottom: 1px solid var(--border); display: flex; gap: 3rem; flex-wrap: wrap; align-items: center; }
+  .control-group { display: flex; align-items: center; gap: 1rem; }
+  .control-label { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; min-width: 9rem; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 140px; height: 2px; background: var(--border2); outline: none; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+  .control-val { font-size: 0.85rem; color: var(--accent); min-width: 3rem; }
+ .main { display: flex; flex-direction: column; width: 100%; }
+ .rank-item { display: grid; grid-template-columns: 1.5rem 1fr auto auto; gap: 0.4rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+  .rank-item:hover { background: rgba(0,0,0,0.02); margin: 0 -1.5rem; padding: 0.35rem 1.5rem; }
+  .rank-num { font-size: 0.7rem; color: var(--muted); text-align: right; }
+  .rank-num.top { color: var(--gold); }
+  .rank-name { font-size: 0.85rem; color: var(--text); font-weight: 500; }
+  .rank-desc { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; }
+  .rank-bar-wrap { width: 90px; height: 4px; background: var(--border2); }
+  .rank-bar { height: 100%; background: var(--accent); transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
+  .rank-score { font-size: 0.85rem; text-align: right; min-width: 5rem; font-weight: 500;}
+  .rank-score span { font-size: 0.65rem; color: var(--muted); display: block; font-weight: 400;}
+  .nice-tag { display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid; margin-left: 6px; vertical-align: middle; }
+  .nice-tag.nice { border-color: #16a34a66; color: #16a34a; }
+  .nice-tag.mean { border-color: #dc262666; color: #dc2626; }
+  .nice-tag.player { border-color: #d9770666; color: #d97706; background: rgba(217,119,6,0.06); }
+  .matrix-wrap { overflow-x: auto; }
+  table.matrix { border-collapse: collapse; width: 100%; font-size: 0.7rem; }
+  .matrix th, .matrix td { padding: 0.45rem 0.6rem; text-align: center; border: 1px solid var(--border); white-space: nowrap; }
+  .matrix th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .matrix td:first-child, .matrix th:first-child { text-align: left; background: var(--surface); font-weight: 500;}
+  .matrix td.self { background: rgba(0,0,0,0.03); }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tab-btn { padding: 0.9rem 1.5rem; font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-weight: 500;}
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; padding: 0.75rem 1.5rem; }
+  .tab-panel.active { display: block; }
+  .noise-warn { background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); color: var(--accent); font-size: 0.7rem; padding: 0.6rem 1rem; margin-bottom: 1rem; display: none; line-height: 1.6; border-radius: 4px;}
+  .noise-warn.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+ <div class="header-left">
+  <h1>The Thermodynamic Limits of <em>Cooperation</em></h1>
+  <p class="header-sub">11-Strategy 14-Player IPD Ecology & The Entropy Threshold</p>
+</div>
+  <button class="run-btn" onclick="runTournament()" id="runBtn">Run Tournament</button>
+</header>
+
+<div class="controls">
+  <div class="control-group">
+    <span class="control-label">Rounds / match</span>
+    <input type="range" min="20" max="1000" value="500" step="10" id="rounds">
+    <span class="control-val" id="roundsVal">500</span>
+  </div>
+  <div class="control-group">
+    <span class="control-label">Noise (0–30% Limit)</span>
+    <input type="range" min="0" max="0.30" value="0.05" step="0.01" id="noise">
+    <span class="control-val" id="noiseVal">5%</span>
+  </div>
+  <div class="control-group">
+    <span class="control-label">Repetitions</span>
+    <input type="range" min="1" max="20" value="8" step="1" id="reps">
+    <span class="control-val" id="repsVal">8</span>
+  </div>
+</div>
+
+<div class="main">
+  <div style="border-bottom: 1px solid var(--border);">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('rankings',this)">Rankings</button>
+    </div>
+    <div class="tab-panel active" id="tab-rankings">
+      <div class="noise-warn" id="noiseWarn">
+        Ecological balance applied: Aggressive player clones (AllD II, STFT II, Dip2) introduced to neutralize the artificial 'Nice' bias of the standard strategy roster.
+      </div>
+      <ul class="rankings" id="rankings"></ul>
+    </div>
+  </div>
+
+  <div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab2('matrix',this)">Head-to-head</button>
+    </div>
+    <div class="tab-panel active" id="tab-matrix">
+      <p style="font-size:0.68rem;color:var(--muted);margin-bottom:1rem;">Average score per round — row strategy vs column strategy.</p>
+      <div class="matrix-wrap"><table class="matrix" id="matrixTable"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// The 14-Player Ecology (11 Unique Strategies)
+const STRATEGIES = [
+  {
+    name: "Tit-for-Tat", short: "TFT", nice: true,
+    desc: "Cooperates first, then mirrors opponent's last move.",
+    move: (h) => h.length === 0 ? 'C' : h[h.length-1][1]
+  },
+  {
+    name: "Tit-for-Two-Tats", short: "TF2T", nice: true,
+    desc: "Only defects after two consecutive defections.",
+    move: (h) => {
+      if (h.length < 2) return 'C';
+      return (h[h.length-1][1]==='D' && h[h.length-2][1]==='D') ? 'D' : 'C';
+    }
+  },
+  {
+    name: "Pavlov", short: "Pav", nice: true,
+    desc: "Win-stay, lose-shift. Exploits unconditional cooperators.",
+    move: (h, myH) => {
+      if (h.length === 0) return 'C';
+      const myLast = myH[myH.length-1], theirLast = h[h.length-1][1];
+      const won = (myLast==='C'&&theirLast==='C') || (myLast==='D'&&theirLast==='C');
+      return won ? myLast : (myLast==='C'?'D':'C');
+    }
+  },
+  {
+    name: "Grudger", short: "Grud", nice: true,
+    desc: "Cooperates until first defection, then defects forever.",
+    move: (h) => h.some(r=>r[1]==='D') ? 'D' : 'C'
+  },
+  {
+    name: "Suspicious TFT", short: "STFT", nice: false,
+    desc: "Like TFT but defects on the very first move.",
+    move: (h) => h.length === 0 ? 'D' : h[h.length-1][1]
+  },
+  {
+    name: "Suspicious TFT II", short: "STFT2", nice: false,
+    desc: "Clone added to increase predator density.",
+    move: (h) => h.length === 0 ? 'D' : h[h.length-1][1]
+  },
+  {
+    name: "Always Cooperate", short: "AllC", nice: true,
+    desc: "Cooperates unconditionally. The naive prey.",
+    move: () => 'C'
+  },
+  {
+    name: "Always Defect", short: "AllD", nice: false,
+    desc: "Defects unconditionally — pure exploitation.",
+    move: () => 'D'
+  },
+  {
+    name: "Always Defect II", short: "AllD2", nice: false,
+    desc: "Clone added to increase predator density.",
+    move: () => 'D'
+  },
+  {
+    name: "Random", short: "Rand", nice: false,
+    desc: "Cooperates or defects with 50/50 probability.",
+    move: () => Math.random() < 0.5 ? 'C' : 'D'
+  },
+  {
+    name: "Generous TFT", short: "GTFT", nice: true,
+    desc: "TFT but forgives defections with probability g = 0.33.",
+    move: (h) => {
+      if (h.length === 0) return 'C';
+      if (h[h.length-1][1] === 'D') return Math.random() < 0.33 ? 'C' : 'D';
+      return 'C';
+    }
+  },
+  {
+    name: "Contrite TFT", short: "CTFT", nice: true,
+    desc: "Retaliates once, but cooperates while 'contrite' to fix own errors.",
+    move: function(h, myH) {
+      if (!this.intended) this.intended = [];
+      let move = 'C';
+      const r = h.length;
+
+      if (r > 0) {
+        const myActualLast = myH[r-1], myIntendedLast = this.intended[r-1], theirActualLast = h[r-1][1];
+        
+        if (myIntendedLast === 'C' && myActualLast === 'D') this.contrite = true;
+        else if (myActualLast === 'C') this.contrite = false;
+
+        if (this.contrite) {
+          move = 'C';
+        } else {
+          let theirDWasJustified = false;
+          if (r >= 2 && this.intended[r-2] === 'C' && myH[r-2] === 'D') theirDWasJustified = true;
+          move = (theirActualLast === 'D' && !theirDWasJustified) ? 'D' : 'C';
+        }
+      }
+      this.intended.push(move);
+      return move;
+    }
+  },
+  {
+    name: "Diplomat (Realpolitik)", short: "DipRP", nice: false, isPlayer: true,
+    desc: "Protects TFT, actively exploits AllC, uses Q(t) memory for the rest.",
+    move: function(h, myH) {
+      const PROBE_LEN = 15;
+      const PROBE_SEQ = ['C','C','D','D','C','C','D','C','C','C','C','C','C','C','C'];
+      const THRESHOLD = 0.72;
+      const r = h.length;
+
+      if (r < PROBE_LEN) return PROBE_SEQ[r];
+
+      if (r === PROBE_LEN) {
+        const theirMoves = h.map(x => x[1]);
+        const myMoves    = myH;
+
+        let tftMatches = 0;
+        for (let i = 1; i < PROBE_LEN; i++) {
+          if (theirMoves[i] === myMoves[i-1]) tftMatches++;
+        }
+        this.isTFT = (tftMatches / (PROBE_LEN - 1)) >= THRESHOLD;
+        
+        const theirCoopRate = theirMoves.filter(m => m === 'C').length / PROBE_LEN;
+        this.isAllC = theirCoopRate === 1.0; 
+        this.qScore = theirCoopRate; 
+      }
+
+      if (this.isTFT) return 'C';
+      if (this.isAllC) return 'D'; // Active Exploitation
+
+      const alpha = 0.70; 
+      const theta = 0.50; 
+      const x_t = h[r-1][1] === 'C' ? 1 : 0;
+      this.qScore = (alpha * this.qScore) + ((1 - alpha) * x_t);
+
+      return this.qScore >= theta ? 'C' : 'D';
+    }
+  },
+  {
+    name: "Diplomat II", short: "Dip2", nice: false, isPlayer: true,
+    desc: "Clone added to increase apex predator density.",
+    move: function(h, myH) {
+      const PROBE_LEN = 15;
+      const PROBE_SEQ = ['C','C','D','D','C','C','D','C','C','C','C','C','C','C','C'];
+      const THRESHOLD = 0.72;
+      const r = h.length;
+
+      if (r < PROBE_LEN) return PROBE_SEQ[r];
+
+      if (r === PROBE_LEN) {
+        const theirMoves = h.map(x => x[1]);
+        const myMoves    = myH;
+        let tftMatches = 0;
+        for (let i = 1; i < PROBE_LEN; i++) if (theirMoves[i] === myMoves[i-1]) tftMatches++;
+        
+        this.isTFT = (tftMatches / (PROBE_LEN - 1)) >= THRESHOLD;
+        const theirCoopRate = theirMoves.filter(m => m === 'C').length / PROBE_LEN;
+        this.isAllC = theirCoopRate === 1.0; 
+        this.qScore = theirCoopRate; 
+      }
+
+      if (this.isTFT) return 'C';
+      if (this.isAllC) return 'D';
+
+      const alpha = 0.70; 
+      const theta = 0.50; 
+      const x_t = h[r-1][1] === 'C' ? 1 : 0;
+      this.qScore = (alpha * this.qScore) + ((1 - alpha) * x_t);
+
+      return this.qScore >= theta ? 'C' : 'D';
+    }
+  }
+];
+
+function payoff(a, b) {
+  if (a==='C'&&b==='C') return 3;
+  if (a==='C'&&b==='D') return 0;
+  if (a==='D'&&b==='C') return 5;
+  return 1;
+}
+
+function applyNoise(m, n) { return Math.random()<n ? (m==='C'?'D':'C') : m; }
+
+function makeCtx(s) {
+  const ctx = Object.create(s);
+  ctx.move = s.move.bind(ctx);
+  return ctx;
+}
+
+function runMatch(sA, sB, rounds, noise) {
+  let hA=[], hB=[], mA=[], mB=[], sA_=0, sB_=0;
+  const ctxA = makeCtx(sA), ctxB = makeCtx(sB);
+  for (let r=0; r<rounds; r++) {
+    const iA = ctxA.move(hA,mA), iB = ctxB.move(hB,mB);
+    const a = applyNoise(iA, noise); 
+    const b = applyNoise(iB, noise);
+    sA_ += payoff(a,b); sB_ += payoff(b,a);
+    hA.push([a,b]); hB.push([b,a]); mA.push(a); mB.push(b);
+  }
+  return {sA:sA_,sB:sB_};
+}
+
+function runTournament() {
+  const btn = document.getElementById('runBtn');
+  btn.textContent='Running…'; btn.classList.add('running');
+  setTimeout(()=>{
+    const rounds = +document.getElementById('rounds').value;
+    const noise = +document.getElementById('noise').value;
+    const reps = +document.getElementById('reps').value;
+    const n = STRATEGIES.length;
+    const totals = new Array(n).fill(0);
+    const matrix = Array.from({length:n},()=>new Array(n).fill(0));
+
+    for (let rep=0; rep<reps; rep++) {
+      for (let i=0; i<n; i++) {
+        for (let j=0; j<=i; j++) {
+          const r = runMatch(STRATEGIES[i], STRATEGIES[j], rounds, noise);
+          if (i===j) {
+            totals[i]+=r.sA; totals[j]+=r.sB;
+            matrix[i][j]+=(r.sA/rounds);
+          } else {
+            totals[i]+=r.sA; totals[j]+=r.sB;
+            matrix[i][j]+=(r.sA/rounds); matrix[j][i]+=(r.sB/rounds);
+          }
+        }
+      }
+    }
+    for (let i=0; i<n; i++) for (let j=0; j<n; j++) matrix[i][j]/=reps;
+
+    const ranked = STRATEGIES.map((s,i)=>({...s,idx:i,total:totals[i],avg:totals[i]/(n*rounds*reps)}))
+      .sort((a,b)=>b.total-a.total);
+
+    renderRankings(ranked);
+    renderMatrix(ranked, matrix);
+
+    const noiseWarn = document.getElementById('noiseWarn');
+    noiseWarn.classList.toggle('visible', true);
+    btn.textContent='Run Tournament'; btn.classList.remove('running');
+  }, 30);
+}
+
+function renderRankings(ranked) {
+  const maxTotal = ranked[0].total;
+  const ul = document.getElementById('rankings');
+  ul.innerHTML = '';
+  ranked.forEach((s,rank)=>{
+    const li = document.createElement('li');
+    li.className = 'rank-item';
+    const pct = Math.round(s.total/maxTotal*100);
+    const niceLabel = s.isPlayer ? 'predator' : s.nice ? 'nice' : 'mean';
+    const niceCls   = s.isPlayer ? 'player' : s.nice ? 'nice' : 'mean';
+    li.innerHTML = `
+      <div class="rank-num ${rank===0?'top':''}">${rank+1}</div>
+      <div>
+        <div class="rank-name">${s.name}<span class="nice-tag ${niceCls}">${niceLabel}</span></div>
+        <div class="rank-desc">${s.desc}</div>
+      </div>
+      <div class="rank-bar-wrap"><div class="rank-bar" style="width:${pct}%"></div></div>
+      <div class="rank-score">${s.total.toLocaleString()}<span>${s.avg.toFixed(2)} / round</span></div>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+function renderMatrix(ranked, matrix) {
+  const t = document.getElementById('matrixTable');
+  let html = '<tr><th></th>';
+  ranked.forEach(s=>{ html+=`<th>${s.short}</th>`; });
+  html+='</tr>';
+  ranked.forEach((rowS,ri)=>{
+    html+=`<tr><td>${rowS.short}</td>`;
+    ranked.forEach((colS,ci)=>{
+      const val = matrix[rowS.idx][colS.idx];
+      const v = val.toFixed(2);
+      let bg='', col='';
+      if (ri===ci) { bg='background:rgba(0,0,0,0.03)'; }
+      else if (val>=2.8) { bg='background:rgba(22,163,74,0.10)'; col='color:#16a34a'; }
+      else if (val<1.5) { bg='background:rgba(220,38,38,0.10)'; col='color:#dc2626'; }
+      html+=`<td class="${ri===ci?'self':''}" style="${bg};${col}">${v}</td>`;
+    });
+    html+='</tr>';
+  });
+  t.innerHTML=html;
+}
+
+function switchTab(name, btn) { document.querySelectorAll('#tab-rankings').forEach(p=>p.classList.remove('active')); btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+name).classList.add('active'); btn.classList.add('active'); }
+function switchTab2(name, btn) { document.querySelectorAll('#tab-matrix').forEach(p=>p.classList.remove('active')); btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+name).classList.add('active'); btn.classList.add('active'); }
+
+document.getElementById('rounds').oninput=function(){document.getElementById('roundsVal').textContent=this.value;};
+document.getElementById('noise').oninput=function(){document.getElementById('noiseVal').textContent=Math.round(this.value*100)+'%';};
+document.getElementById('reps').oninput=function(){document.getElementById('repsVal').textContent=this.value;};
+
+// Force the labels to sync with the slider values on page load
+document.getElementById('rounds').dispatchEvent(new Event('input'));
+document.getElementById('noise').dispatchEvent(new Event('input'));
+document.getElementById('reps').dispatchEvent(new Event('input'));
+
+runTournament();
+</script>
+</body>
+</html>
